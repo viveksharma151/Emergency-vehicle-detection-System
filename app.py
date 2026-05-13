@@ -206,10 +206,52 @@ def load_yolo():
 @st.cache_resource(show_spinner=False)
 def load_audio_model():
     try:
-        import tensorflow as tf
-        if os.path.exists("siren_horn_detector.h5"):
-            return tf.keras.models.load_model("siren_horn_detector.h5"), None
-        return None, "Model file 'siren_horn_detector.h5' not found."
+        import h5py
+        import numpy as np
+
+        if not os.path.exists("siren_horn_detector.h5"):
+            return None, "Model file 'siren_horn_detector.h5' not found."
+
+        weights_list = []
+        biases_list = []
+
+        with h5py.File("siren_horn_detector.h5", "r") as f:
+            # Keras h5 files store weights under 'model_weights'
+            root = f.get("model_weights", f)
+            layer_names = sorted([k for k in root.keys() if "dense" in k.lower()])
+
+            for layer_name in layer_names:
+                grp = root[layer_name]
+                # Older Keras: weights under grp[layer_name]['kernel:0']
+                # Newer Keras: weights under grp['vars']['0']
+                if layer_name in grp:
+                    sub = grp[layer_name]
+                    w = np.array(sub["kernel:0"])
+                    b = np.array(sub["bias:0"])
+                elif "vars" in grp:
+                    sub = grp["vars"]
+                    w = np.array(sub["0"])
+                    b = np.array(sub["1"])
+                else:
+                    continue
+                weights_list.append(w)
+                biases_list.append(b)
+
+        if len(weights_list) < 2:
+            return None, f"Could not read model weights (found {len(weights_list)} dense layers)."
+
+        # Build a simple numpy forward pass (Dense relu → Dense relu → Dense softmax)
+        def predict(x):
+            for i, (w, b) in enumerate(zip(weights_list, biases_list)):
+                x = x @ w + b
+                if i < len(weights_list) - 1:
+                    x = np.maximum(0, x)   # relu
+            # softmax on final layer
+            e = np.exp(x - np.max(x))
+            return e / e.sum()
+
+        return predict, None
+
     except Exception as e:
         return None, str(e)
 
@@ -357,7 +399,7 @@ with tab2:
                         if len(chunk) > 2000: # Ensure we have enough data
                             mfccs = librosa.feature.mfcc(y=chunk, sr=22050, n_mfcc=40)
                             mfccs_scaled = np.mean(mfccs.T, axis=0).reshape(1, 40)
-                            pred = audio_model.predict(mfccs_scaled, verbose=0)
+                            pred = audio_model(mfccs_scaled)
                             a_detected = np.argmax(pred) == 1
                     except:
                         pass
