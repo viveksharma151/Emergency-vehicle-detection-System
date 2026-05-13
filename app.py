@@ -549,7 +549,7 @@ with tab3:
         st.markdown("### 📦 Tech Stack")
         tech = {
             "YOLOv8": ("🔍", "Ultralytics", "#f87171"),
-            "TensorFlow/Keras": ("🧠", "Audio ANN", "#60a5fa"),
+            "h5py + NumPy": ("🧠", "Audio ANN inference", "#60a5fa"),
             "Librosa": ("🔊", "Audio Feature Extraction", "#a78bfa"),
             "OpenCV": ("🎥", "Video Processing", "#34d399"),
             "Streamlit": ("🌐", "Web Interface", "#fb923c"),
@@ -570,6 +570,17 @@ with tab3:
 # Tab 4 - About
 with tab4:
     st.markdown('<div class="section-header">📊 About This Project</div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.25); 
+         border-radius:12px; padding:0.9rem 1.4rem; margin-bottom:1.5rem;">
+        🌐 <b>Live App:</b> 
+        <a href="https://emergency-vehicle-detection-system-oh9dtszn2qb7fqnafcfsqr.streamlit.app" 
+           target="_blank" style="color:#60a5fa;">
+            emergency-vehicle-detection-system-oh9dtszn2qb7fqnafcfsqr.streamlit.app
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
     with col1:
@@ -617,6 +628,6 @@ with tab4:
     st.markdown("---")
     st.markdown("""
     <div style="text-align:center; color:#475569; font-size:0.85rem; padding:1rem">
-        Built with ❤️ using YOLOv8 · TensorFlow · Librosa · Streamlit
+        Built with ❤️ using YOLOv8 · Librosa · h5py · Streamlit
     </div>
     """, unsafe_allow_html=True)
