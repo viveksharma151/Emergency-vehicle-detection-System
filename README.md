@@ -1,43 +1,42 @@
-# 🚨 Emergency Vehicle Detection System
+# Emergency Vehicle Detection System
 
-A dual-modal AI system that detects emergency vehicles by fusing **YOLOv8 visual detection** and **deep audio classification (ANN)** in real time.
+A minor project that detects emergency vehicles using a combination of visual and audio analysis. It uses YOLOv8 for object detection in video frames, and a trained ANN to classify siren/horn sounds from the audio. Both outputs are fused to give a final alert status.
 
-## 🔗 Live Demo
-> Deployed on [Streamlit Community Cloud](https://streamlit.io/cloud)
-
----
-
-## 🧠 How It Works
-
-| Module | Model | Input | Output |
-|--------|-------|-------|--------|
-| Visual | YOLOv8n (fine-tuned) | Video frames | Bounding boxes |
-| Audio  | ANN (TensorFlow/Keras) | MFCC features | Siren / Horn |
-| Fusion | Rule-based logic | Both flags | Status alert |
-
-### Fusion Decision Logic
-```
-if v_detected AND a_detected → !! EMERGENCY !!
-elif v_detected              → WARNING: VISUAL ONLY
-elif a_detected              → WARNING: SIREN ONLY
-else                         → SYSTEM: CLEAR
-```
+## Live Demo
+Deployed on Streamlit Community Cloud.
 
 ---
 
-## 📁 Project Structure
+## How It Works
+
+The system processes a video in two parallel ways:
+
+- **Visual**: YOLOv8 (fine-tuned on a Roboflow emergency vehicle dataset) scans each frame and flags if an ambulance, fire truck, or police car is visible.
+- **Audio**: Librosa extracts 1-second MFCC features from the video audio, which are fed into a small TensorFlow ANN trained on UrbanSound8K (siren and horn classes).
+- **Fusion**: Both flags are combined each second using simple rule-based logic:
 
 ```
-├── app.py                  # Streamlit web app
-├── requirements.txt        # Python dependencies
-├── 2ndtimebest.pt          # YOLOv8 fine-tuned model
-├── siren_horn_detector.h5  # Audio ANN model
-└── Output_Demo.mp4         # Pre-processed demo video
+v_detected + a_detected  =>  EMERGENCY
+v_detected only          =>  WARNING: VISUAL ONLY
+a_detected only          =>  WARNING: SIREN ONLY
+neither                  =>  SYSTEM: CLEAR
 ```
 
 ---
 
-## 🚀 Run Locally
+## Project Structure
+
+```
+app.py                  - main Streamlit app
+requirements.txt        - dependencies
+2ndtimebest.pt          - fine-tuned YOLOv8 model weights
+siren_horn_detector.h5  - trained audio ANN
+Output_Demo.mp4         - sample output video
+```
+
+---
+
+## Running Locally
 
 ```bash
 pip install -r requirements.txt
@@ -46,15 +45,17 @@ streamlit run app.py
 
 ---
 
-## 🛠️ Tech Stack
-- **YOLOv8** (Ultralytics) — Visual detection
-- **TensorFlow / Keras** — Audio ANN
-- **Librosa** — MFCC feature extraction
-- **OpenCV** — Video frame processing
-- **Streamlit** — Web interface
+## Tech Stack
+
+- YOLOv8 (Ultralytics) for visual detection
+- TensorFlow/Keras for the audio classifier
+- Librosa for MFCC feature extraction
+- OpenCV for frame-by-frame video processing
+- Streamlit for the web UI
 
 ---
 
-## 📊 Datasets
-- **Visual**: [Roboflow Emergency Vehicle Dataset](https://roboflow.com)
-- **Audio**: [UrbanSound8K](https://urbansounddataset.weebly.com/urbansound8k.html)
+## Datasets Used
+
+- Visual model: [Roboflow Emergency Vehicle Dataset](https://roboflow.com)
+- Audio model: [UrbanSound8K](https://urbansounddataset.weebly.com/urbansound8k.html)

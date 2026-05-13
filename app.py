@@ -4,7 +4,7 @@ import os
 from PIL import Image
 import io
 
-# ─── Page Config ─────────────────────────────────────────────────────────────
+# Page Config
 st.set_page_config(
     page_title="Emergency Vehicle Detection System",
     page_icon="🚨",
@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ─── Custom CSS ──────────────────────────────────────────────────────────────
+# Custom CSS
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -192,7 +192,7 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 
-# ─── Model Loading (Cached) ───────────────────────────────────────────────────
+# Model Loading
 @st.cache_resource(show_spinner=False)
 def load_yolo():
     try:
@@ -214,7 +214,7 @@ def load_audio_model():
         return None, str(e)
 
 
-# ─── Hero Section ─────────────────────────────────────────────────────────────
+# Hero Section
 st.markdown("""
 <div class="hero-container">
     <div class="hero-badge">🚨 Minor Project — AI/ML</div>
@@ -226,7 +226,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ─── Key Metrics ──────────────────────────────────────────────────────────────
+# Key Metrics
 c1, c2, c3, c4 = st.columns(4)
 with c1:
     st.markdown('<div class="metric-card"><div class="metric-value">YOLOv8</div><div class="metric-label">Visual Detection Model</div></div>', unsafe_allow_html=True)
@@ -239,12 +239,10 @@ with c4:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ─── Tabs ─────────────────────────────────────────────────────────────────────
+# Tabs
 tab1, tab2, tab3, tab4 = st.tabs(["🎬 Demo Video", "🔍 Live Detection", "⚙️ Architecture", "📊 About"])
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 1 — Demo Video
-# ══════════════════════════════════════════════════════════════════════════════
+# Tab 1 - Demo Video
 with tab1:
     st.markdown('<div class="section-header">🎬 System Demo</div>', unsafe_allow_html=True)
     st.markdown("""
@@ -278,9 +276,7 @@ with tab1:
         st.markdown('<div class="result-clear">🟢 SYSTEM: CLEAR</div>', unsafe_allow_html=True)
         st.caption("No emergency detected")
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 2 — Live Video Detection
-# ══════════════════════════════════════════════════════════════════════════════
+# Tab 2 - Live Video Detection
 with tab2:
     st.markdown('<div class="section-header">🎥 Live Video Detection</div>', unsafe_allow_html=True)
     st.markdown("""
@@ -346,11 +342,11 @@ with tab2:
                     if not ret:
                         break
 
-                    # A. Vision Logic (YOLOv8)
+                    # run yolo on the current frame
                     results = yolo_model(frame, conf=0.4, verbose=False)
                     v_detected = len(results[0].boxes) > 0
                     
-                    # B. Audio Logic (ANN)
+                    # check audio for this second
                     current_sec = int(frame_idx / fps)
                     a_detected = False
                     try:
@@ -366,7 +362,7 @@ with tab2:
                     except:
                         pass
                         
-                    # C. Sensor Fusion Decision
+                    # combine both results
                     if v_detected and a_detected:
                         status_text, color = "!! EMERGENCY !!", (0, 0, 255) # Red
                         emergency_frames += 1
@@ -378,7 +374,7 @@ with tab2:
                     else:
                         status_text, color = "SYSTEM: CLEAR", (0, 200, 80) # Green
 
-                    # D. Visualization
+                    # draw status on frame
                     annotated = results[0].plot()
                     cv2.rectangle(annotated, (0, 0), (620, 55), (0, 0, 0), -1)
                     cv2.putText(annotated, status_text, (10, 38),
@@ -454,9 +450,7 @@ with tab2:
         </div>
         """, unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 3 — Architecture
-# ══════════════════════════════════════════════════════════════════════════════
+# Tab 3 - Architecture
 with tab3:
     st.markdown('<div class="section-header">⚙️ System Architecture</div>', unsafe_allow_html=True)
 
@@ -536,9 +530,7 @@ with tab3:
             </div>
             """, unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 4 — About
-# ══════════════════════════════════════════════════════════════════════════════
+# Tab 4 - About
 with tab4:
     st.markdown('<div class="section-header">📊 About This Project</div>', unsafe_allow_html=True)
 
