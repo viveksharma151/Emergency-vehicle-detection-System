@@ -216,37 +216,31 @@ def load_audio_model():
         biases_list = []
 
         with h5py.File("siren_horn_detector.h5", "r") as f:
-            # Keras h5 files store weights under 'model_weights'
-            root = f.get("model_weights", f)
-            layer_names = sorted([k for k in root.keys() if "dense" in k.lower()])
+            root = f["model_weights"]
+            dense_layers = sorted([k for k in root.keys() if "dense" in k.lower()])
 
-            for layer_name in layer_names:
-                grp = root[layer_name]
-                # Older Keras: weights under grp[layer_name]['kernel:0']
-                # Newer Keras: weights under grp['vars']['0']
-                if layer_name in grp:
-                    sub = grp[layer_name]
-                    w = np.array(sub["kernel:0"])
-                    b = np.array(sub["bias:0"])
-                elif "vars" in grp:
-                    sub = grp["vars"]
-                    w = np.array(sub["0"])
-                    b = np.array(sub["1"])
-                else:
-                    continue
-                weights_list.append(w)
-                biases_list.append(b)
+            for layer_name in dense_layers:
+                # structure: root[layer_name][seq_key][layer_name]['kernel'/'bias']
+                layer_grp = root[layer_name]
+                for seq_key in layer_grp.keys():
+                    inner = layer_grp[seq_key].get(layer_name)
+                    if inner is None:
+                        continue
+                    w = np.array(inner["kernel"])
+                    b = np.array(inner["bias"])
+                    weights_list.append(w)
+                    biases_list.append(b)
+                    break  # only one seq group per layer
 
         if len(weights_list) < 2:
             return None, f"Could not read model weights (found {len(weights_list)} dense layers)."
 
-        # Build a simple numpy forward pass (Dense relu → Dense relu → Dense softmax)
+        # numpy forward pass: Dense(256,relu) -> Dense(128,relu) -> Dense(2,softmax)
         def predict(x):
             for i, (w, b) in enumerate(zip(weights_list, biases_list)):
                 x = x @ w + b
                 if i < len(weights_list) - 1:
-                    x = np.maximum(0, x)   # relu
-            # softmax on final layer
+                    x = np.maximum(0, x)  # relu
             e = np.exp(x - np.max(x))
             return e / e.sum()
 
@@ -254,6 +248,7 @@ def load_audio_model():
 
     except Exception as e:
         return None, str(e)
+
 
 
 # Hero Section
