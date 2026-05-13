@@ -279,64 +279,178 @@ with tab1:
         st.caption("No emergency detected")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 2 — Live Detection
+# TAB 2 — Live Video Detection
 # ══════════════════════════════════════════════════════════════════════════════
 with tab2:
-    st.markdown('<div class="section-header">🔍 Live Image Detection</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">🎥 Live Video Detection</div>', unsafe_allow_html=True)
     st.markdown("""
     <div class="info-box">
-        📸 Upload an image to run live YOLOv8 detection. 
-        The model will identify emergency vehicles and draw bounding boxes with confidence scores.
+        🎥 Upload a video and the YOLOv8 model will scan every frame for emergency vehicles, 
+        draw bounding boxes, and return an annotated output video. 
+        Audio fusion is demonstrated in the <b>Demo Video</b> tab using the pre-processed result.
     </div>
     """, unsafe_allow_html=True)
 
-    uploaded = st.file_uploader(
-        "Upload an image (JPG, PNG, JPEG)",
-        type=["jpg", "jpeg", "png"],
-        help="Upload a photo of a road scene to detect emergency vehicles"
+    uploaded_video = st.file_uploader(
+        "Upload a video (MP4, AVI, MOV)",
+        type=["mp4", "avi", "mov"],
+        help="Upload a road scene video to detect emergency vehicles frame by frame"
     )
 
-    if uploaded:
-        img = Image.open(uploaded).convert("RGB")
-        img_array = np.array(img)
+    if uploaded_video:
+        import cv2
+        import tempfile
 
-        col_orig, col_result = st.columns(2)
-        with col_orig:
-            st.markdown("**Original Image**")
-            st.image(img, use_container_width=True)
+        # Save uploaded video to a temp file
+        tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+        tfile.write(uploaded_video.read())
+        tfile.flush()
+        input_path = tfile.name
 
-        with st.spinner("🔍 Loading YOLOv8 model and running detection..."):
-            yolo_model, yolo_err = load_yolo()
+        st.markdown("**📥 Uploaded Video**")
+        st.video(uploaded_video)
 
-        if yolo_err:
-            st.error(f"❌ Could not load YOLO model: {yolo_err}")
-        elif yolo_model:
-            with st.spinner("🚀 Detecting emergency vehicles..."):
-                results = yolo_model(img_array, conf=0.4, verbose=False)
-                result_img = results[0].plot()  # BGR numpy array
-                boxes = results[0].boxes
+        if st.button("🚀 Run Sensor Fusion Detection", type="primary", use_container_width=True):
+            with st.spinner("🔍 Loading YOLOv8 and Audio models..."):
+                yolo_model, yolo_err = load_yolo()
+                audio_model, audio_err = load_audio_model()
 
-            with col_result:
-                st.markdown("**Detection Result**")
-                st.image(result_img[:, :, ::-1], use_container_width=True)  # BGR→RGB
+            if yolo_err or audio_err:
+                if yolo_err: st.error(f"❌ Could not load YOLO model: {yolo_err}")
+                if audio_err: st.error(f"❌ Could not load Audio model: {audio_err}")
+            elif yolo_model and audio_model:
+                cap = cv2.VideoCapture(input_path)
+                fps = cap.get(cv2.CAP_PROP_FPS) or 25
+                w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-            st.markdown("---")
-            if len(boxes) > 0:
-                st.markdown('<div class="result-emergency">🚨 EMERGENCY VEHICLE DETECTED!</div>', unsafe_allow_html=True)
-                st.markdown(f"<br>**{len(boxes)} detection(s) found:**", unsafe_allow_html=True)
-                for i, box in enumerate(boxes):
-                    conf = float(box.conf[0])
-                    cls_id = int(box.cls[0])
-                    cls_name = yolo_model.names.get(cls_id, f"Class {cls_id}")
-                    st.markdown(f"- Detection {i+1}: **{cls_name}** — Confidence: `{conf:.2%}`")
-            else:
-                st.markdown('<div class="result-clear">✅ No Emergency Vehicles Detected</div>', unsafe_allow_html=True)
+                import librosa
+                st.info("🔊 Extracting audio via Librosa...")
+                try:
+                    audio_mono, sr = librosa.load(input_path, sr=22050)
+                except Exception as e:
+                    st.warning(f"⚠️ Audio extraction failed: {e}. System will run Vision-only.")
+                    audio_mono = np.zeros(int(total_frames/fps * 22050)) # Fallback to silence
+
+                out_path = tempfile.mktemp(suffix="_detected.mp4")
+                fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                out = cv2.VideoWriter(out_path, fourcc, fps, (w, h))
+
+                progress_bar = st.progress(0, text="Processing frames...")
+                frame_idx = 0
+                emergency_frames = 0
+
+                while cap.isOpened():
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+
+                    # A. Vision Logic (YOLOv8)
+                    results = yolo_model(frame, conf=0.4, verbose=False)
+                    v_detected = len(results[0].boxes) > 0
+                    
+                    # B. Audio Logic (ANN)
+                    current_sec = int(frame_idx / fps)
+                    a_detected = False
+                    try:
+                        start_idx = int(current_sec * 22050)
+                        end_idx = int((current_sec + 1) * 22050)
+                        chunk = audio_mono[start_idx:end_idx]
+
+                        if len(chunk) > 2000: # Ensure we have enough data
+                            mfccs = librosa.feature.mfcc(y=chunk, sr=22050, n_mfcc=40)
+                            mfccs_scaled = np.mean(mfccs.T, axis=0).reshape(1, 40)
+                            pred = audio_model.predict(mfccs_scaled, verbose=0)
+                            a_detected = np.argmax(pred) == 1
+                    except:
+                        pass
+                        
+                    # C. Sensor Fusion Decision
+                    if v_detected and a_detected:
+                        status_text, color = "!! EMERGENCY !!", (0, 0, 255) # Red
+                        emergency_frames += 1
+                    elif v_detected:
+                        status_text, color = "WARNING: VISUAL ONLY", (0, 165, 255) # Orange
+                        emergency_frames += 1
+                    elif a_detected:
+                        status_text, color = "WARNING: SIREN ONLY", (0, 255, 255) # Yellow
+                    else:
+                        status_text, color = "SYSTEM: CLEAR", (0, 200, 80) # Green
+
+                    # D. Visualization
+                    annotated = results[0].plot()
+                    cv2.rectangle(annotated, (0, 0), (620, 55), (0, 0, 0), -1)
+                    cv2.putText(annotated, status_text, (10, 38),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
+
+                    out.write(annotated)
+                    frame_idx += 1
+
+                    if total_frames > 0:
+                        progress_bar.progress(
+                            min(frame_idx / total_frames, 1.0),
+                            text=f"Processing frame {frame_idx}/{total_frames}..."
+                        )
+
+                cap.release()
+                out.release()
+                progress_bar.progress(1.0, text="✅ Video processing complete! Adding audio back...")
+                
+                # Combine processed video with original audio
+                try:
+                    from moviepy.editor import VideoFileClip
+                    final_out_path = tempfile.mktemp(suffix="_final.mp4")
+                    
+                    video_clip = VideoFileClip(out_path)
+                    original_clip = VideoFileClip(input_path)
+                    if original_clip.audio is not None:
+                        video_clip = video_clip.set_audio(original_clip.audio)
+                    
+                    video_clip.write_videofile(final_out_path, codec="libx264", audio_codec="aac", logger=None)
+                    
+                    # Clean up
+                    video_clip.close()
+                    original_clip.close()
+                    out_path = final_out_path
+                    progress_bar.progress(1.0, text="✅ Audio & Video Fusion complete!")
+                except Exception as e:
+                    st.warning(f"⚠️ Could not re-attach audio: {e}")
+
+                # Show results
+                st.markdown("---")
+                r1, r2, r3 = st.columns(3)
+                with r1:
+                    st.metric("Total Frames", frame_idx)
+                with r2:
+                    st.metric("Emergency Frames", emergency_frames)
+                with r3:
+                    pct = (emergency_frames / frame_idx * 100) if frame_idx > 0 else 0
+                    st.metric("Detection Rate", f"{pct:.1f}%")
+
+                if emergency_frames > 0:
+                    st.markdown('<div class="result-emergency">🚨 EMERGENCY VEHICLE DETECTED IN VIDEO!</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div class="result-clear">✅ No Emergency Vehicles Found</div>', unsafe_allow_html=True)
+
+                st.markdown("<br>**📤 Annotated Output Video**", unsafe_allow_html=True)
+                with open(out_path, "rb") as f:
+                    video_bytes = f.read()
+                st.video(video_bytes)
+                st.download_button(
+                    label="⬇️ Download Annotated Video",
+                    data=video_bytes,
+                    file_name="detected_output.mp4",
+                    mime="video/mp4",
+                    use_container_width=True
+                )
     else:
         st.markdown("""
         <div style="text-align:center; padding: 4rem 2rem; background: rgba(255,255,255,0.02); 
              border: 2px dashed rgba(255,255,255,0.1); border-radius: 16px; color: #64748b;">
-            <div style="font-size:3rem">📸</div>
-            <div style="font-size:1rem; margin-top:0.5rem">Drop an image above to run live detection</div>
+            <div style="font-size:3rem">🎥</div>
+            <div style="font-size:1rem; margin-top:0.5rem">Upload a video above to run live YOLOv8 detection</div>
+            <div style="font-size:0.85rem; margin-top:0.3rem; color:#475569">MP4 · AVI · MOV supported</div>
         </div>
         """, unsafe_allow_html=True)
 

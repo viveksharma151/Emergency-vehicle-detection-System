@@ -29,3 +29,9 @@ Thumbs.db
 *.zip
 urban_data/
 runs/
+Output_Demo.mp4
+
+# Exclude SaaS folders to prevent mixing repositories
+SaaS_Portfolio/
+content-multiply/
+saasproject/
